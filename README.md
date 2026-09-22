@@ -7,7 +7,7 @@ ataques, provas, modelos de ameaça, e sempre sobrava a mesma frustração:
 o raciocínio que importa acontece num lugar opaco, e o que chega até mim
 é só o resíduo dele, um log, um terminal rolando texto. O Dostói nasce
 dessa frustração específica, aplicada a um caso concreto: um agente de
-IA (tipo Claude Code) codando, enquanto eu só enxergo a casca do que ele
+IA codando, enquanto eu só enxergo a casca do que ele
 está pensando.
 
 A resposta óbvia seria um avatar decorativo, reage a "rodando" com uma
