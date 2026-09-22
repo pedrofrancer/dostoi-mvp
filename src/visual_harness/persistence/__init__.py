@@ -1,3 +1,4 @@
-"""Persistência SQLite de sessão, evento e transição de estado. Ganha
-conteúdo no Step 11.
+"""Persistência SQLite (Step 11): `database.py` (esquema, engine),
+`repositories.py` (leitura/escrita). `SessionStore` decide o que
+persistir; aqui só sabe gravar e ler linha.
 """
