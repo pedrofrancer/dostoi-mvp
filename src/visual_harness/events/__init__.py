@@ -1,3 +1,4 @@
-"""Modelo, validação e barramento de eventos. Ganha conteúdo no Step 2
-(modelos) e Step 3 (barramento).
+"""Modelo, validação e barramento de eventos. Modelo e validação vieram
+no Step 2 (`models.py`, `types.py`); o barramento chega no Step 3
+(`bus.py`).
 """
