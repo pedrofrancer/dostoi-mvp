@@ -14,13 +14,13 @@ dependencies = [
     "typer",
     "websockets",
     "sqlalchemy",
+    "httpx",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
 ]
 
 [project.scripts]
