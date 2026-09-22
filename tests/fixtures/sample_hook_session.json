@@ -1,0 +1,51 @@
+[
+  {"hook_event_name": "SessionStart", "session_id": "fixture-session"},
+  {
+    "hook_event_name": "PostToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Read",
+    "tool_input": {"file_path": "src/auth.py"},
+    "tool_response": {"is_error": false}
+  },
+  {
+    "hook_event_name": "PostToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Edit",
+    "tool_input": {"file_path": "src/auth.py"},
+    "tool_response": {"is_error": false}
+  },
+  {
+    "hook_event_name": "PreToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Bash",
+    "tool_input": {"command": "pytest tests/test_auth.py"}
+  },
+  {
+    "hook_event_name": "PostToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Bash",
+    "tool_input": {"command": "pytest tests/test_auth.py"},
+    "tool_response": {"is_error": true}
+  },
+  {
+    "hook_event_name": "PostToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Edit",
+    "tool_input": {"file_path": "src/auth.py"},
+    "tool_response": {"is_error": false}
+  },
+  {
+    "hook_event_name": "PreToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Bash",
+    "tool_input": {"command": "pytest tests/test_auth.py"}
+  },
+  {
+    "hook_event_name": "PostToolUse",
+    "session_id": "fixture-session",
+    "tool_name": "Bash",
+    "tool_input": {"command": "pytest tests/test_auth.py"},
+    "tool_response": {"is_error": false}
+  },
+  {"hook_event_name": "Stop", "session_id": "fixture-session"}
+]
