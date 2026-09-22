@@ -51,6 +51,25 @@ class TestSessionsAndEvents(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "task_started")
 
+    def test_get_session_includes_context(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        client.post(
+            "/api/events",
+            json={
+                "session_id": "sess_1",
+                "source": "claude-code",
+                "type": "task_started",
+                "payload": {"description": "Implementar X"},
+            },
+        )
+
+        session = client.get("/api/sessions/sess_1").json()
+        self.assertIn("context", session)
+        self.assertEqual(session["context"]["task"], "Implementar X")
+        self.assertEqual(session["context"]["current_state"], "understanding")
+
     def test_unknown_session_returns_404(self):
         app, *_ = build_test_app()
         client = TestClient(app)
@@ -133,6 +152,28 @@ class TestWebSocket(unittest.TestCase):
         self.assertEqual(first["payload"]["type"], "task_started")
         self.assertEqual(second["type"], "state_update")
         self.assertEqual(second["payload"]["state"], "understanding")
+
+    def test_websocket_receives_timeline_update_on_real_transition(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as websocket:
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_ws2",
+                    "source": "claude-code",
+                    "type": "task_started",
+                    "payload": {"description": "algo"},
+                },
+            )
+            websocket.receive_json()  # event
+            websocket.receive_json()  # state_update
+            third = websocket.receive_json()
+
+        self.assertEqual(third["type"], "timeline_update")
+        self.assertIsNone(third["payload"]["transition"]["from"])
+        self.assertEqual(third["payload"]["transition"]["to"], "understanding")
 
 
 class TestDefaultBind(unittest.TestCase):
