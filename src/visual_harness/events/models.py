@@ -35,6 +35,7 @@ class Event(BaseModel):
     type: EventType
     version: int = 1
     payload: dict[str, Any] = Field(default_factory=dict)
+    sequence: int | None = None
 
     @model_validator(mode="after")
     def _check_required_payload_fields(self) -> "Event":
