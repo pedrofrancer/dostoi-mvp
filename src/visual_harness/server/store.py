@@ -1,11 +1,14 @@
 """Armazenamento de sessão em memória (TechSpecs Seção 17). Limitado de
 propósito (a própria Seção 17 pede isso: não manter eventos ilimitados
-em RAM); persistência de verdade chega no Step 11.
+em RAM). Persistência SQLite (Step 11) é opcional e write-through: o
+`engine`, se dado, grava a história completa sem alterar o que fica
+em RAM (que continua limitado e é sempre a fonte da leitura rápida).
 """
 from collections import deque
 from datetime import datetime
 
 from pydantic import BaseModel
+from sqlalchemy.engine import Engine
 
 from visual_harness.context.engine import compute_context
 from visual_harness.context.models import SessionContext
@@ -25,17 +28,24 @@ class SessionRecord(BaseModel):
 
 
 class SessionStore:
-    def __init__(self, max_events_per_session: int = MAX_EVENTS_PER_SESSION) -> None:
+    def __init__(
+        self,
+        max_events_per_session: int = MAX_EVENTS_PER_SESSION,
+        engine: Engine | None = None,
+    ) -> None:
         self._sessions: dict[str, SessionRecord] = {}
         self._events: dict[str, deque] = {}
         self._timeline: dict[str, list[StateTransition]] = {}
         self._last_state: dict[str, AgentState | None] = {}
         self._max_events = max_events_per_session
+        self._engine = engine
 
     def record(self, event: Event) -> StateTransition | None:
         """Anexa o evento e, se o estado derivado mudou, registra a
         transição. Devolve a transição nova, ou None se o estado não
         mudou com esse evento."""
+        from visual_harness.persistence import repositories
+
         session_id = event.session_id
         if session_id not in self._sessions:
             self._sessions[session_id] = SessionRecord(
@@ -44,8 +54,14 @@ class SessionStore:
             self._events[session_id] = deque(maxlen=self._max_events)
             self._timeline[session_id] = []
             self._last_state[session_id] = None
+            if self._engine is not None:
+                repositories.save_session(
+                    self._engine, session_id, event.source, event.timestamp
+                )
 
         self._events[session_id].append(event)
+        if self._engine is not None:
+            repositories.save_event(self._engine, event)
 
         previous = self._last_state[session_id]
         current = derive_state(self.get_events(session_id))
@@ -58,6 +74,11 @@ class SessionStore:
             )
             self._timeline[session_id].append(transition)
             self._last_state[session_id] = current
+            if self._engine is not None:
+                repositories.save_transition(self._engine, session_id, transition)
+                repositories.save_context_snapshot(
+                    self._engine, session_id, self.get_context(session_id)
+                )
             return transition
         return None
 
