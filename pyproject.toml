@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "visual-harness"
+version = "0.1.0"
+description = "Camada de observabilidade humanizada para agentes de IA que programam."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "pydantic>=2",
+    "uvicorn",
+    "typer",
+    "websockets",
+    "sqlalchemy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+vh = "visual_harness.cli.commands:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/visual_harness"]
