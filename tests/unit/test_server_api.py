@@ -153,6 +153,66 @@ class TestWebSocket(unittest.TestCase):
         self.assertEqual(second["type"], "state_update")
         self.assertEqual(second["payload"]["state"], "understanding")
 
+    def test_malformed_websocket_message_does_not_drop_connection(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as websocket:
+            websocket.send_text("isso nao e json")
+            websocket.send_bytes(b"\x00\x01binario")
+            websocket.send_json(["nao", "e", "um", "dict"])
+
+            # a conexao segue viva: um evento de verdade ainda chega normal
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_ws_bad",
+                    "source": "claude-code",
+                    "type": "task_started",
+                    "payload": {},
+                },
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(message["type"], "event")
+
+    def test_rapid_state_changes_are_debounced_in_broadcast(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as websocket:
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_hyst",
+                    "source": "claude-code",
+                    "type": "task_started",
+                    "payload": {"description": "algo"},
+                },
+            )
+            websocket.receive_json()  # event
+            first_state_update = websocket.receive_json()
+            websocket.receive_json()  # timeline_update (None -> understanding, transicao real)
+
+            # segundo evento chega bem rapido (dentro da janela padrao de 200ms)
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_hyst",
+                    "source": "claude-code",
+                    "type": "test_failed",
+                    "payload": {"test": "login"},
+                },
+            )
+            websocket.receive_json()  # event
+            second_state_update = websocket.receive_json()
+            websocket.receive_json()  # timeline_update (understanding -> error, transicao real)
+
+        self.assertEqual(first_state_update["payload"]["state"], "understanding")
+        # a mudanca de verdade (error) fica suprimida pela histerese;
+        # o que aparece no state_update ainda e o estado anterior
+        self.assertEqual(second_state_update["payload"]["state"], "understanding")
+
     def test_websocket_receives_timeline_update_on_real_transition(self):
         app, *_ = build_test_app()
         client = TestClient(app)
