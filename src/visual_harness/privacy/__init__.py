@@ -1,3 +1,3 @@
-"""Redação de segredo antes de qualquer persistência. Ganha conteúdo no
-Step 13.
+"""Privacidade (Step 13): `redaction.py` (padrões de texto da Seção 43),
+`modes.py` (strict/standard/debug da Seção 44).
 """
