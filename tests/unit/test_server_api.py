@@ -1,0 +1,147 @@
+import unittest
+
+from fastapi.testclient import TestClient
+
+from visual_harness.demo.player import DemoPlayer
+from visual_harness.events.bus import EventBus
+from visual_harness.server.api import create_app
+from visual_harness.server.store import SessionStore
+
+
+def build_test_app():
+    bus = EventBus()
+    store = SessionStore()
+    demo_player = DemoPlayer(bus, step_delay_s=0.01)
+    app = create_app(bus, store, demo_player)
+    return app, bus, store, demo_player
+
+
+class TestHealth(unittest.TestCase):
+    def test_health_returns_ok_and_version(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+        response = client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "ok")
+        self.assertIn("version", body)
+        self.assertEqual(body["connected_adapters"], 0)
+
+
+class TestSessionsAndEvents(unittest.TestCase):
+    def test_post_event_creates_session_and_is_listed(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/events",
+            json={
+                "session_id": "sess_1",
+                "source": "claude-code",
+                "type": "task_started",
+                "payload": {"description": "algo"},
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        sessions = client.get("/api/sessions").json()
+        self.assertEqual([s["id"] for s in sessions], ["sess_1"])
+
+        events = client.get("/api/sessions/sess_1/events").json()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["type"], "task_started")
+
+    def test_unknown_session_returns_404(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+        response = client.get("/api/sessions/nao-existe")
+        self.assertEqual(response.status_code, 404)
+
+    def test_invalid_event_type_is_rejected(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+        response = client.post(
+            "/api/events",
+            json={"session_id": "s", "source": "x", "type": "tipo_inventado"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_timeline_shows_state_transitions(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        for event_type, payload in (
+            ("task_started", {"description": "algo"}),
+            ("test_failed", {"test": "login"}),
+            ("approach_changed", {}),
+        ):
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_1",
+                    "source": "claude-code",
+                    "type": event_type,
+                    "payload": payload,
+                },
+            )
+
+        timeline = client.get("/api/sessions/sess_1/timeline").json()
+        transitions = [(t["from"], t["to"]) for t in timeline]
+        self.assertEqual(
+            transitions,
+            [
+                (None, "understanding"),
+                ("understanding", "error"),
+                ("error", "reconsidering"),
+            ],
+        )
+
+
+class TestDemoEndpoints(unittest.TestCase):
+    def test_demo_start_then_stop_changes_state(self):
+        app, _bus, _store, demo_player = build_test_app()
+        client = TestClient(app)
+
+        response = client.post("/api/demo/start")
+        self.assertEqual(response.json()["state"], "running")
+
+        response = client.post("/api/demo/stop")
+        self.assertEqual(response.json()["state"], "idle")
+
+
+class TestWebSocket(unittest.TestCase):
+    def test_websocket_receives_event_and_state_update(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as websocket:
+            post_response = client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_ws",
+                    "source": "claude-code",
+                    "type": "task_started",
+                    "payload": {"description": "algo"},
+                },
+            )
+            self.assertEqual(post_response.status_code, 200)
+
+            first = websocket.receive_json()
+            second = websocket.receive_json()
+
+        self.assertEqual(first["type"], "event")
+        self.assertEqual(first["payload"]["type"], "task_started")
+        self.assertEqual(second["type"], "state_update")
+        self.assertEqual(second["payload"]["state"], "understanding")
+
+
+class TestDefaultBind(unittest.TestCase):
+    def test_default_host_is_localhost_not_all_interfaces(self):
+        from visual_harness.main import DEFAULT_HOST
+
+        self.assertEqual(DEFAULT_HOST, "127.0.0.1")
+        self.assertNotEqual(DEFAULT_HOST, "0.0.0.0")
+
+
+if __name__ == "__main__":
+    unittest.main()
