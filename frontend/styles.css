@@ -31,6 +31,39 @@ body {
   opacity: 0.7;
 }
 
+.panel {
+  width: 260px;
+  font-size: 13px;
+  border-top: 1px solid #2a2c38;
+  padding-top: 10px;
+}
+
+.context-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  opacity: 0.85;
+}
+
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timeline-list li {
+  opacity: 0.6;
+}
+
+.timeline-list li.timeline-current {
+  opacity: 1;
+  font-weight: 600;
+}
+
 /* Animações genéricas tocadas por nome (Step 8: só as poucas que o
    motor de humanização do Step 5 já usa). Nome sem regra aqui = sem
    efeito, não erro. */
