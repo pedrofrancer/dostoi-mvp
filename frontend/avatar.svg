@@ -1,17 +1,28 @@
 <svg id="avatar" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
-  <g id="arms">
-    <path id="arm-left" d="M 60 170 Q 30 170 25 140" stroke="#8b8fa3" stroke-width="10"
-      stroke-linecap="round" fill="none" />
-    <path id="arm-right" d="M 140 170 Q 170 170 175 140" stroke="#8b8fa3" stroke-width="10"
-      stroke-linecap="round" fill="none" />
-  </g>
-
-  <g id="body">
-    <rect x="55" y="140" width="90" height="70" rx="30" fill="#8b8fa3" />
-  </g>
+  <g id="body"></g>
+  <g id="arms"></g>
 
   <g id="head">
-    <circle cx="100" cy="90" r="55" fill="#c9cdda" />
+    <circle cx="100" cy="90" r="55" fill="#F2A65A" />
+  </g>
+
+  <g id="accessories">
+    <!-- boné deerstalker -->
+    <path d="M 42 78 Q 100 12 158 78 Q 160 90 100 82 Q 40 90 42 78 Z" fill="#37474F" />
+    <path d="M 18 84 Q 4 84 7 106 Q 21 118 47 104 Z" fill="#2C3440" />
+    <path d="M 182 84 Q 196 84 193 106 Q 179 118 153 104 Z" fill="#2C3440" />
+    <ellipse cx="60" cy="46" rx="13" ry="19" fill="#2C3440" transform="rotate(-18 60 46)" />
+    <ellipse cx="140" cy="46" rx="13" ry="19" fill="#2C3440" transform="rotate(18 140 46)" />
+    <circle cx="100" cy="32" r="7" fill="#2C3440" />
+
+    <!-- cachimbo -->
+    <path
+      d="M 118 132 L 150 140 Q 160 142 160 132 Q 160 124 150 126 L 122 122 Z"
+      fill="#8B5A2B"
+      stroke="#5C3A21"
+      stroke-width="2"
+    />
+    <ellipse cx="155" cy="132" rx="9" ry="11" fill="#5C3A21" />
   </g>
 
   <g id="eyebrows">
@@ -33,9 +44,7 @@
   </g>
 
   <g id="mouth">
-    <path id="mouth-path" d="M 80 130 Q 100 130 120 130" stroke="#3a3d4a" stroke-width="4"
+    <path id="mouth-path" d="M 80 130 Q 100 130 120 130" stroke="#8a4a1f" stroke-width="4"
       stroke-linecap="round" fill="none" />
   </g>
-
-  <g id="accessories"></g>
 </svg>
