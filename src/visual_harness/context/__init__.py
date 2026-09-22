@@ -1,4 +1,3 @@
-"""Modelo de contexto de sessão (tarefa, abordagens, erros recentes,
-feedback do usuário). Ganha conteúdo junto do Step 4 (motor de estado),
-que depende dele pra decidir estado.
+"""Contexto de sessão (Step 9): `models.py` (SessionContext), `engine.py`
+(agregação de tarefa, arquivos, testes e erros a partir dos eventos).
 """
