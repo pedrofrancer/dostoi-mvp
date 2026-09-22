@@ -1,4 +1,5 @@
 # Dostói MVP
+
   <img width="576" alt="Dostói" src="https://i.pinimg.com/736x/cc/d4/35/ccd435211b4466ac3575571f2726166b.jpg" />
 
 Passei anos formalizando processos que não conseguia ver por dentro,
@@ -6,8 +7,7 @@ ataques, provas, modelos de ameaça, e sempre sobrava a mesma frustração:
 o raciocínio que importa acontece num lugar opaco, e o que chega até mim
 é só o resíduo dele, um log, um terminal rolando texto. O Dostói nasce
 dessa frustração específica, aplicada a um caso concreto: um agente de
-IA codando, enquanto eu só enxergo a casca do que ele
-está pensando.
+IA codando, enquanto eu só enxergo a casca do que ele está pensando.
 
 A resposta óbvia seria um avatar decorativo, reage a "rodando" com uma
 carinha feliz, a "parado" com uma carinha de sono. Isso já existe, e não
@@ -56,10 +56,15 @@ avatar teve um insight sobre o trabalho, não apenas reagiu a ele.
 
 O avatar é desacoplado da lógica. A mesma consciência por trás, os
 estados, os julgamentos, pode ser representada por avatares
-completamente diferentes: um gato, um robô, uma raposa, um personagem
-pixelado. A lógica de interpretação é uma coisa, a aparência é outra;
-uma vez que o "cérebro" funcione, criar personagens novos é trabalho
-simples, sem tocar no raciocínio.
+completamente diferentes. A pele que está de pé hoje é um retrato 8-bit
+que eu mesmo trouxe pro projeto: um único traçado de silhueta que
+precisou de cirurgia, não de redesenho, pra virar expressivo (sobrancelha
+e olho eram uma peça só, cortados numa aresta que já existia na própria
+arte, e a boca era um recorte na borda do contorno que virou buraco
+independente). A lógica de interpretação é uma coisa, a aparência é
+outra; uma vez que o "cérebro" funcione, encaixar um personagem novo é
+questão de desenhar em cima do mesmo contrato de partes, sem tocar no
+raciocínio.
 
 ## Por que a ordem de construção importa
 
@@ -67,7 +72,229 @@ Já vi o suficiente de sistemas mal calibrados para saber onde mora o
 risco real aqui: não é o avatar ficar bonito, é a parte de
 "entendimento", Camada 1 e Camada 2, fazer sentido de verdade. Um avatar
 que muda de estado de forma aleatória ou incoerente é pior que nenhum
-avatar, é ruído com forma de sinal. Por isso valido primeiro se a lógica
-de interpretação funciona, mesmo sem nenhum visual, só os estados
-impressos em texto, antes de investir em desenho, animação e variações
-de personagem.
+avatar, é ruído com forma de sinal. Por isso o projeto seguiu, passo a
+passo, a ordem que o próprio TechSpecs recomenda: primeiro provar que a
+interpretação funciona em texto puro, só depois investir em desenho,
+animação e variação de personagem.
+
+## Onde isso chegou
+
+Treze das quatorze etapas do roadmap fechadas; a última (testes de
+integração, auditoria de segurança e performance, esta própria
+documentação) em andamento no momento em que escrevo isto.
+
+| Etapa | O que é | Estado |
+|---|---|---|
+| 1 | Repositório e empacotamento | fechada |
+| 2 | Modelos de evento | fechada |
+| 3 | Barramento de eventos | fechada |
+| 4 | Motor de estado | fechada |
+| 5 | Motor de humanização | fechada |
+| 6 | Fonte de eventos de demo | fechada |
+| 7 | API backend e WebSocket | fechada |
+| 8 | Avatar SVG no frontend | fechada |
+| 9 | Linha do tempo da sessão | fechada |
+| 10 | Comando CLI genérico de evento | fechada |
+| 11 | Persistência SQLite | fechada |
+| 12 | Adapter do Claude Code | fechada |
+| 13 | Privacidade e redaction | fechada |
+| 14 | Testes e documentação | em andamento |
+
+Histórico completo nas issues do repositório: as seis primeiras (#1 a
+#6) foram fechadas quando o escopo pequeno do MVP em texto deu lugar ao
+PRD/TechSpecs formal; as quatorze seguintes (#7 a #20) seguem a
+Implementation Order do TechSpecs, uma issue por etapa.
+
+## Arquitetura
+
+Um evento nasce (hook do Claude Code, `vh event`, ou `POST /api/events`),
+passa por um barramento assíncrono, e dali se ramifica: o motor de
+estado decide o que está acontecendo, o motor de humanização traduz
+isso em expressão e gesto, o store guarda a história (limitada em
+memória, completa em SQLite), e o WebSocket manda tudo isso pro avatar
+reagir ao vivo.
+
+```
+evento → EventBus → SessionStore → motor de estado → motor de humanização → WebSocket → avatar
+                          ↓
+                       SQLite (write-through, com redação opcional)
+```
+
+- `visual_harness/events/`: o contrato comum (`Event`, `EventType`,
+  UUIDv7 pra ordenação cronológica) e o barramento.
+- `visual_harness/state/`: os dezessete estados possíveis, a cascata de
+  regras que decide qual deles vale, a arbitração de prioridade quando
+  há sinal conflitante, a histerese que evita o avatar piscar demais.
+- `visual_harness/humanization/`: o vocabulário visual (expressão,
+  gesto, animação, mensagem curta) e a guarda que impede qualquer
+  mensagem reivindicar experiência subjetiva ("reconsiderando
+  abordagem", nunca "a IA está com medo").
+- `visual_harness/context/`: o resumo de sessão, tarefa, arquivos
+  tocados, testes, erros recentes, calculado a partir do histórico de
+  eventos.
+- `visual_harness/server/`: a API REST, o WebSocket, e o store em
+  memória que serve tudo isso rápido.
+- `visual_harness/persistence/`: as quatro tabelas SQLite (sessions,
+  events, state_transitions, context_snapshots) que guardam a história
+  completa depois que a memória já esqueceu o começo.
+- `visual_harness/privacy/`: redação de segredo antes de qualquer
+  escrita em disco, três modos (strict, standard, debug).
+- `visual_harness/adapters/`: o contrato que qualquer agente de IA
+  precisa satisfazer pra alimentar o sistema, e a primeira
+  implementação real, a tradução dos hooks do Claude Code.
+- `visual_harness/demo/`: uma sessão fixa de sete eventos que prova a
+  arquitetura inteira sem precisar de nenhum agente de verdade rodando.
+- `visual_harness/cli/`: o `vh`, cliente fino sobre a própria API.
+- `frontend/`: o avatar, o painel de contexto, a timeline, tudo em
+  JavaScript puro, sem build, servido pelo próprio backend.
+
+## Instalando e rodando
+
+```bash
+cd dostoi-mvp
+pip install -e .
+vh start
+```
+
+Abre `http://127.0.0.1:8765/` no navegador: avatar, painel de contexto,
+timeline. `Ctrl+C` pra parar em primeiro plano, ou `vh stop` de outro
+terminal se subiu em background (o PID fica salvo em
+`~/.visual-harness/server.pid`).
+
+Pra ver funcionando sem plugar em nada ainda:
+
+```bash
+vh demo
+```
+
+Toca a sessão de demonstração fixa, sete eventos, e o avatar reage
+sozinho.
+
+### Configuração (variáveis de ambiente)
+
+| Variável | Padrão | O que faz |
+|---|---|---|
+| `VH_HOST` | `127.0.0.1` | host que o hook do Claude Code chama |
+| `VH_PORT` | `8765` | porta que o hook do Claude Code chama |
+| `VH_DISABLE_PERSISTENCE` | desligado (persistência ligada) | qualquer valor desliga a escrita em SQLite |
+| `VH_PRIVACY_MODE` | `standard` | `strict` / `standard` / `debug` |
+
+Banco em `~/.visual-harness/harness.db`.
+
+## Eventos
+
+Todo evento carrega: `id` (UUIDv7, ordenável no tempo), `session_id`,
+`timestamp`, `source`, `type`, `version`, `payload`, `sequence`
+(atribuído pelo barramento, não por quem publica). Alguns tipos exigem
+campo obrigatório no payload, os únicos com exemplo concreto no
+TechSpecs:
+
+| Tipo | Campo obrigatório |
+|---|---|
+| `file_read`, `file_created`, `file_modified`, `file_deleted`, `file_searched` | `path` |
+| `command_started`, `command_finished`, `command_failed` | `command` |
+| `test_failed` | `test` |
+| `test_suite_completed` | `passed`, `failed` |
+
+Os demais tipos aceitam qualquer payload, porque o próprio TechSpecs
+deixa esse schema em aberto.
+
+```bash
+vh event --type file_read --path src/main.py --session s1
+vh event --type command_started --command "npm test"
+```
+
+No PowerShell, o quoting de `--json` não é o que parece óbvio. Testei
+até achar o que funciona de verdade:
+
+```powershell
+vh event --json '{\"type\": \"test_failed\", \"session_id\": \"s1\", \"source\": \"cli\", \"payload\": {\"test\": \"login\"}}'
+```
+
+Aspas simples por fora, `\"` literal por dentro, porque o PowerShell
+engole aspas duplas escapadas antes delas chegarem no processo nativo,
+mesmo dentro de uma string com crase. Mais simples ainda: usar `--path`
+ou `--command` em vez de `--json` sempre que o payload for só isso.
+
+## Plugando no Claude Code
+
+O primeiro adapter real. Duas peças: `translate_hook_event`, função
+pura que traduz o payload cru de um hook pro schema de evento comum
+(devolve `None` quando não há tipo correspondente, como na delegação
+via `Agent`/`Task`, melhor omitir do que forçar um tipo errado), e
+`ClaudeCodeAdapter`, que satisfaz o contrato de adapter do sistema.
+
+| Hook | Tool | EventType |
+|---|---|---|
+| `SessionStart` | — | `agent_started` |
+| `Stop` | — | `agent_stopped` |
+| `UserPromptSubmit` | — | `user_message` |
+| `PreToolUse` | `Bash`/`PowerShell` | `command_started` |
+| `PostToolUse` | `Bash`/`PowerShell` | `command_finished` ou `command_failed` |
+| `PostToolUse` | `Read` | `file_read` |
+| `PostToolUse` | `Glob`/`Grep` | `file_searched` |
+| `PostToolUse` | `Edit`/`Write` | `file_modified` |
+| `PreToolUse` | `AskUserQuestion`/`ExitPlanMode` | `agent_waiting` |
+| qualquer outro | — | nada emitido |
+
+Em `.claude/settings.json` do projeto onde o agente vai codar:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "python C:/caminho/para/dostoi-mvp/hooks/claude_code_hook.py" }] }],
+    "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "python C:/caminho/para/dostoi-mvp/hooks/claude_code_hook.py" }] }],
+    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "python C:/caminho/para/dostoi-mvp/hooks/claude_code_hook.py" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "python C:/caminho/para/dostoi-mvp/hooks/claude_code_hook.py" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "python C:/caminho/para/dostoi-mvp/hooks/claude_code_hook.py" }] }]
+  }
+}
+```
+
+O script nunca falha alto: qualquer problema é engolido, porque um hook
+quebrado pararia o próprio turno do agente, e isso seria pior que
+qualquer avatar mudo. É sucessor do `hooks/emit_event.py` do MVP em
+texto original, que só gravava JSONL; este traduz de verdade e fala com
+o backend.
+
+## Privacidade
+
+Redação de segredo (`API_KEY`, `TOKEN`, `PASSWORD`, `SECRET`, chave
+privada em bloco PEM) acontece só na fronteira de persistência, nunca
+no que você vê ao vivo na própria sessão. Três modos: `strict` (nem o
+texto redigido sobrevive, payload e contexto ficam vazios antes de
+gravar), `standard` (o padrão, segredo trocado por `[REDACTED]`),
+`debug` (nada é escondido, e o processo avisa isso explicitamente no
+início, em letra maiúscula, porque modo debug com sessão sensível é
+exatamente o tipo de decisão que não deveria acontecer por acidente).
+
+## Testando
+
+```bash
+pip install -e ".[dev]"
+pytest tests
+```
+
+Três camadas, como o TechSpecs pede: `tests/unit` (isolado, mock onde
+faz sentido), `tests/integration` (componentes de verdade rodando
+juntos, sem mock, uma sessão inteira do primeiro evento até o
+WebSocket), `tests/fixtures` (dado reaproveitado pelos testes de
+integração). Cento e setenta testes, todos verdes na última vez que
+rodei.
+
+Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
+conhecida encontrada.
+
+## MVP em texto original (`dostoi/`)
+
+Antes deste pacote existir, um protótipo mais simples provava a mesma
+ideia só em texto, sem servidor, sem SQLite, sem avatar nenhum.
+Continua intacto no repositório, standalone:
+
+```bash
+python -m dostoi.watch --events ~/.dostoi/events.jsonl
+```
+
+O histórico de por que ele existe ao lado do pacote novo está nas
+issues #1 a #6, fechadas no dia em que o PRD e o TechSpecs formais
+substituíram o escopo original.
