@@ -1,0 +1,30 @@
+[
+  {
+    "type": "task_started",
+    "payload": { "description": "Implement authentication" }
+  },
+  {
+    "type": "file_read",
+    "payload": { "path": "src/auth.ts" }
+  },
+  {
+    "type": "command_started",
+    "payload": { "command": "npm test" }
+  },
+  {
+    "type": "test_failed",
+    "payload": { "test": "login" }
+  },
+  {
+    "type": "user_correction",
+    "payload": { "text": "Don't modify the database layer." }
+  },
+  {
+    "type": "approach_changed",
+    "payload": {}
+  },
+  {
+    "type": "test_suite_completed",
+    "payload": { "passed": 33, "failed": 0 }
+  }
+]
