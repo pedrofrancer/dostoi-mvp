@@ -3,8 +3,10 @@
 comportamento das rotas.
 """
 import time
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from visual_harness import __version__
@@ -25,7 +27,12 @@ class EventIn(BaseModel):
     payload: dict = {}
 
 
-def create_app(bus: EventBus, store: SessionStore, demo_player: DemoPlayer) -> FastAPI:
+def create_app(
+    bus: EventBus,
+    store: SessionStore,
+    demo_player: DemoPlayer,
+    static_dir: Path | None = None,
+) -> FastAPI:
     app = FastAPI(title="Visual Harness")
     start_time = time.monotonic()
 
@@ -116,6 +123,11 @@ def create_app(bus: EventBus, store: SessionStore, demo_player: DemoPlayer) -> F
             pass
         finally:
             subscription.unsubscribe()
+
+    if static_dir is not None and static_dir.is_dir():
+        # Montado por último: rotas de API sempre têm prioridade sobre
+        # arquivo estático de mesmo caminho.
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
 
     return app
 
