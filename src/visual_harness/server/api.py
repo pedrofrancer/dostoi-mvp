@@ -17,6 +17,7 @@ from visual_harness.events.types import EventType
 from visual_harness.humanization.engine import humanize
 from visual_harness.server.store import SessionStore
 from visual_harness.state.engine import derive_state
+from visual_harness.state.hysteresis import StateHysteresis
 
 
 class EventIn(BaseModel):
@@ -35,6 +36,10 @@ def create_app(
     app = FastAPI(title="Visual Harness")
     start_time = time.monotonic()
     connected_websockets: set[WebSocket] = set()
+    # Histerese (Step 4, Secao 25) por sessao: so afeta o que o
+    # WebSocket manda pro avatar, nunca o estado "oficial" que o store
+    # grava na timeline (esse continua sempre o raw, sem debounce).
+    hysteresis_by_session: dict[str, StateHysteresis] = {}
 
     async def _broadcast(message: dict) -> None:
         dead: list[WebSocket] = []
@@ -54,14 +59,16 @@ def create_app(
 
         await _broadcast({"type": "event", "payload": event.model_dump(mode="json")})
 
-        state = derive_state(store.get_events(event.session_id))
-        humanized = humanize(state)
+        raw_state = derive_state(store.get_events(event.session_id))
+        hysteresis = hysteresis_by_session.setdefault(event.session_id, StateHysteresis())
+        visible_state = hysteresis.update(raw_state)
+        humanized = humanize(visible_state)
         await _broadcast(
             {
                 "type": "state_update",
                 "payload": {
                     "session_id": event.session_id,
-                    "state": state.value,
+                    "state": visible_state.value,
                     "humanization": humanized.model_dump(mode="json"),
                 },
             }
@@ -138,7 +145,17 @@ def create_app(
         connected_websockets.add(websocket)
         try:
             while True:
-                message = await websocket.receive_json()
+                try:
+                    message = await websocket.receive_json()
+                except WebSocketDisconnect:
+                    raise
+                except Exception:
+                    # mensagem que nao e JSON valido: ignora, nao derruba a conexao
+                    continue
+
+                if not isinstance(message, dict):
+                    continue
+
                 msg_type = message.get("type")
                 if msg_type == "demo_start":
                     await demo_player.start()
