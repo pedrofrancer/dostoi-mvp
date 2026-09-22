@@ -1,6 +1,6 @@
 # Dostói MVP
 
-<img width="576" alt="Dostói" src="https://i.pinimg.com/736x/cc/d4/35/ccd435211b4466ac3575571f2726166b.jpg" />
+                                             <img width="576" alt="Dostói" src="https://i.pinimg.com/736x/cc/d4/35/ccd435211b4466ac3575571f2726166b.jpg" />
 
 Passei anos formalizando processos que não conseguia ver por dentro,
 ataques, provas, modelos de ameaça, e sempre sobrava a mesma frustração:
