@@ -140,6 +140,25 @@ class TestSessionStoreWithPersistence(unittest.TestCase):
             self.assertEqual(len(transition_rows), 2)
             self.assertEqual(len(snapshot_rows), 2)
 
+    def test_privacy_mode_redacts_persisted_payload_but_not_in_memory(self):
+        import json
+
+        from visual_harness.privacy.modes import PrivacyMode
+        from visual_harness.server.store import SessionStore
+
+        with temp_engine() as engine:
+            store = SessionStore(engine=engine, privacy_mode=PrivacyMode.STANDARD)
+            event = ev(EventType.COMMAND_STARTED, sequence=1, command="API_KEY=abc123 npm start")
+            store.record(event)
+
+            in_memory = store.get_events("sess_1")[0]
+            self.assertEqual(in_memory.payload["command"], "API_KEY=abc123 npm start")
+
+            with engine.begin() as conn:
+                row = conn.execute(events_table.select()).mappings().first()
+            persisted_payload = json.loads(row["payload_json"])
+            self.assertNotIn("abc123", persisted_payload["command"])
+
     def test_record_without_engine_touches_no_sqlite(self):
         from visual_harness.server.store import SessionStore
 
