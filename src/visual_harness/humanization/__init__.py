@@ -1,3 +1,4 @@
-"""Motor de humanização: estado + contexto vira expressão, gesto,
-animação e mensagem curta. Ganha conteúdo no Step 5.
+"""Motor de humanização (Step 5): `models.py` (HumanizedState),
+`expressions.py`/`gestures.py` (vocabulário visual), `messages.py`
+(guarda da Seção 62), `engine.py` (mapa estado → comportamento).
 """
