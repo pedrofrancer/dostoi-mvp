@@ -1,6 +1,7 @@
 """Comandos do `vh` (TechSpecs Seção 36-37): fino cliente HTTP da API
 já construída nos Steps 7-9, não uma segunda implementação do backend.
 """
+import asyncio
 import json
 import os
 import signal
@@ -12,6 +13,8 @@ import uvicorn
 
 from visual_harness.events.types import EventType
 from visual_harness.main import DEFAULT_HOST, DEFAULT_PORT, build_app
+from visual_harness.terminal.client import run as run_terminal_client
+from visual_harness.terminal.renderer import TerminalOverlay
 
 app = typer.Typer(help="Visual Harness: observabilidade humanizada pra agentes de IA.")
 
@@ -128,6 +131,31 @@ def event(
         typer.echo(f"vh: evento rejeitado ({response.status_code}): {response.text}")
         raise typer.Exit(code=1)
     typer.echo(f"vh: evento {body.get('type', '?')} enviado")
+
+
+@app.command()
+def watch(
+    host: str = HostOption,
+    port: int = PortOption,
+    mode: str = typer.Option(
+        "compact", "--mode", help="compact (padrao), full ou minimal (Secao 19)"
+    ),
+) -> None:
+    """Mostra o avatar reagindo neste terminal (TechSpecs Seção 4-5,
+    18-19). Compacto: avatar e estado. Full: painel de contexto e
+    linha do tempo tambem. Minimal: so o glifo. Ctrl+C pra sair."""
+    if mode not in ("compact", "full", "minimal"):
+        typer.echo(f"vh: modo invalido {mode!r}, use compact, full ou minimal")
+        raise typer.Exit(code=2)
+
+    overlay = TerminalOverlay(mode=mode)
+    overlay.start()
+    try:
+        asyncio.run(run_terminal_client(host, port, overlay))
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        overlay.stop()
 
 
 if __name__ == "__main__":
