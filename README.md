@@ -332,8 +332,8 @@ capturado num stream em memória em vez do terminal de verdade). A
 única perna sem automação é olhar pra tela de verdade, seja o
 `vh watch` num terminal real, seja o avatar SVG antigo no navegador;
 essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
-reaproveitado pelos testes de integração e end-to-end. Duzentos e trinta
-e sete testes, todos verdes na última vez que rodei.
+reaproveitado pelos testes de integração e end-to-end. VERIFICAR_CONTAGEM
+testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
