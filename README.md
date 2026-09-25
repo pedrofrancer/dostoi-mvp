@@ -116,8 +116,9 @@ reagir ao vivo.
 
 ```
 evento → EventBus → SessionStore → motor de estado → motor de humanização → WebSocket → avatar
-                          ↓
-                       SQLite (write-through, com redação opcional)
+                          │
+                          ├→ SQLite (write-through, com redação opcional)
+                          └→ detector de checkpoint → julgamento (LLM ou heurística) → WebSocket → popup de Camada 2
 ```
 
 - `visual_harness/events/`: o contrato comum (`Event`, `EventType`,
@@ -132,6 +133,13 @@ evento → EventBus → SessionStore → motor de estado → motor de humanizaç
 - `visual_harness/context/`: o resumo de sessão, tarefa, arquivos
   tocados, testes, erros recentes, calculado a partir do histórico de
   eventos.
+- `visual_harness/judgment/`: Camada 2, a metacognitiva (TechSpecs
+  Seção 60.1). Detecta checkpoint (falha de comando ou teste,
+  retrabalho no mesmo arquivo), redige o contexto antes de sair do
+  processo, e pede o julgamento a um LLM por HTTP genérico compatível
+  com OpenAI (qualquer provedor, incluindo os gratuitos: Groq,
+  OpenRouter, Ollama local), com template fixo quando falta
+  configuração ou rede.
 - `visual_harness/server/`: a API REST, o WebSocket, e o store em
   memória que serve tudo isso rápido.
 - `visual_harness/persistence/`: as quatro tabelas SQLite (sessions,
@@ -208,6 +216,9 @@ sozinho.
 | `VH_PORT` | `8765` | porta que o hook do Claude Code chama |
 | `VH_DISABLE_PERSISTENCE` | desligado (persistência ligada) | qualquer valor desliga a escrita em SQLite |
 | `VH_PRIVACY_MODE` | `standard` | `strict` / `standard` / `debug` |
+| `VH_JUDGE_BASE_URL` | nenhuma (Camada 2 usa template fixo) | raiz da API compatível com OpenAI do provedor (ex.: `https://api.groq.com/openai/v1`, `https://openrouter.ai/api/v1`, `http://localhost:11434/v1` pro Ollama local) |
+| `VH_JUDGE_API_KEY` | nenhuma | chave do provedor acima; sem ela (ou sem `VH_JUDGE_BASE_URL`/`VH_JUDGE_MODEL`) a Camada 2 cai no template fixo |
+| `VH_JUDGE_MODEL` | nenhuma | nome do modelo, no formato que o provedor esperar |
 
 Banco em `~/.visual-harness/harness.db`.
 
@@ -317,8 +328,8 @@ capturado num stream em memória em vez do terminal de verdade). A
 única perna sem automação é olhar pra tela de verdade, seja o
 `vh watch` num terminal real, seja o avatar SVG antigo no navegador;
 essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
-reaproveitado pelos testes de integração e end-to-end. Duzentos e seis
-testes, todos verdes na última vez que rodei.
+reaproveitado pelos testes de integração e end-to-end. Duzentos e vinte
+e cinco testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
