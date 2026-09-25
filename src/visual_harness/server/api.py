@@ -85,6 +85,18 @@ def create_app(
                 }
             )
 
+        context = store.get_context(event.session_id)
+        if context is not None:
+            await _broadcast(
+                {
+                    "type": "session_update",
+                    "payload": {
+                        "session_id": event.session_id,
+                        "context": context.model_dump(mode="json"),
+                    },
+                }
+            )
+
     bus.subscribe(_on_event)
 
     @app.get("/api/health")
