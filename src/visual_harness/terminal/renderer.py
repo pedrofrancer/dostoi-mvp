@@ -1,15 +1,17 @@
-"""Overlay de terminal, modo compacto (TechSpecs Seção 18-19, 57-59).
+"""Overlay de terminal (TechSpecs Seção 18-19, 57-59): compacto, cheio
+e minimal.
 
 A região reservada (últimas `region_height` linhas da janela) fica
 imune ao scroll do agente via DECSTBM (Seção 4/5: o overlay desenha no
 MESMO tty do agente, processo separado, sem multiplexador). Em volta
 de cada desenho: salva o cursor de verdade (onde o agente está agora),
 escreve na região reservada, restaura o cursor pro agente continuar
-exatamente de onde parou. Redesenha só quando o conteúdo muda, pra
-evitar tempestade de animação (Seção 57).
+exatamente de onde parou.
 
 Limite conhecido: resize de terminal em pleno `vh watch` não é tratado
-(Windows não tem SIGWINCH); reinicie o comando se redimensionar.
+(Windows não tem SIGWINCH); reinicie o comando se redimensionar. Modo
+cheio não hidrata contexto/linha do tempo de antes da conexão (Step
+17): começa vazio e preenche ao vivo.
 """
 import shutil
 import sys
@@ -17,9 +19,21 @@ import sys
 from visual_harness.terminal import ansi
 from visual_harness.terminal.glyphs import glyph_for
 
-REGION_HEIGHT = 6
+MODE_COMPACT = "compact"
+MODE_FULL = "full"
+MODE_MINIMAL = "minimal"
+
+TIMELINE_MAX_ENTRIES = 5
+
 BOX_INNER_WIDTH = 15
 POPUP_INNER_WIDTH = 40
+FULL_INNER_WIDTH = 30
+
+REGION_HEIGHT_BY_MODE = {
+    MODE_MINIMAL: 1,
+    MODE_COMPACT: 6,
+    MODE_FULL: 4 + 1 + 6 + (2 + TIMELINE_MAX_ENTRIES),
+}
 
 
 def _center(text: str, width: int) -> str:
@@ -64,24 +78,69 @@ def _layer2_box(message: str) -> list[str]:
     bottom = "╰" + "─" * (POPUP_INNER_WIDTH + 2) + "╯"
     body = [
         "│ " + line.ljust(POPUP_INNER_WIDTH) + " │"
-        for line in _wrap(message, POPUP_INNER_WIDTH)[: REGION_HEIGHT - 2]
+        for line in _wrap(message, POPUP_INNER_WIDTH)[: TIMELINE_MAX_ENTRIES]
     ]
     return [top, *body, bottom]
 
 
-class TerminalOverlay:
-    """Modo compacto (issue Step 16): avatar + rótulo de estado, popup
-    transitório de Camada 2. Painel de contexto e timeline completos
-    ficam pra depois, como o checklist pede."""
+def _titled_border(title: str, inner_width: int, corners: tuple[str, str]) -> str:
+    header = f"{corners[0]} {title} "
+    total = inner_width + 4
+    pad = max(total - len(header) - 1, 0)
+    return header + "─" * pad + corners[1]
 
-    def __init__(self, stream=None, region_height: int = REGION_HEIGHT, rows: int | None = None):
+
+def _row(label: str, value: str, inner_width: int) -> str:
+    text = f"{label.ljust(9)}{value}"[:inner_width].ljust(inner_width)
+    return "│ " + text + " │"
+
+
+def _context_lines(context: dict, inner_width: int) -> list[str]:
+    task = context.get("task") or "-"
+    agent = context.get("agent") or "-"
+    files = len(context.get("modified_files") or [])
+    passed = context.get("tests_passed", 0)
+    failed = context.get("tests_failed", 0)
+    errors = len(context.get("recent_errors") or [])
+    return [
+        _titled_border("CONTEXTO", inner_width, ("┌", "┐")),
+        _row("Tarefa", str(task), inner_width),
+        _row("Agente", str(agent), inner_width),
+        _row("Arquivos", f"{files} modificados", inner_width),
+        _row("Testes", f"{passed} / {failed}", inner_width),
+        _row("Erros", str(errors), inner_width),
+    ]
+
+
+def _timeline_lines(entries: list[str], inner_width: int) -> list[str]:
+    lines = [_titled_border("LINHA DO TEMPO", inner_width, ("├", "┤"))]
+    for index, label in enumerate(entries):
+        marker = "→" if index == len(entries) - 1 else "✓"
+        text = f"{marker} {label}"[:inner_width].ljust(inner_width)
+        lines.append("│ " + text + " │")
+    lines.append("└" + "─" * (inner_width + 2) + "┘")
+    return lines
+
+
+class TerminalOverlay:
+    """Três modos (Seção 19): `compact` (padrão, avatar + estado, Step
+    16), `full` (avatar + painel de contexto + linha do tempo, Step
+    17), `minimal` (só o glifo). Trava na primeira sessão que aparece,
+    ignora mensagem de outra sessão daí em diante."""
+
+    def __init__(self, stream=None, mode: str = MODE_COMPACT, rows: int | None = None):
         self._stream = stream if stream is not None else sys.stdout
-        self._region_height = region_height
+        self._mode = mode
+        self._region_height = REGION_HEIGHT_BY_MODE[mode]
         self._rows = rows or 24
         self._fixed_rows = rows is not None  # testabilidade: pula a consulta ao SO
         self._started = False
         self._last_key = None
+        self._draw_counter = 0
+        self._session_id: str | None = None
         self._last_state_payload: dict | None = None
+        self._last_context: dict = {}
+        self._timeline_labels: list[str] = []
 
     def start(self) -> None:
         if not self._fixed_rows:
@@ -119,23 +178,77 @@ class TerminalOverlay:
             self._write(ansi.move_to(start_row + offset, 1) + ansi.CLEAR_LINE + row_text)
         self._write(ansi.RESTORE_CURSOR)
 
+    def _accept(self, payload: dict) -> bool:
+        """Primeira sessão que aparece vira a sessão travada (Step 17);
+        mensagem de outra sessão é ignorada daí em diante."""
+        session_id = payload.get("session_id")
+        if self._session_id is None:
+            self._session_id = session_id
+        return session_id == self._session_id
+
+    def _draw_full(self) -> None:
+        humanization = (self._last_state_payload or {}).get("humanization") or {}
+        expression = humanization.get("expression", "neutral")
+        state = (self._last_state_payload or {}).get("state", "unknown")
+        lines = [
+            *_state_box(state, expression),
+            "",
+            *_context_lines(self._last_context, FULL_INNER_WIDTH),
+            *_timeline_lines(self._timeline_labels, FULL_INNER_WIDTH),
+        ]
+        # cada chamada aqui já é reação a uma mensagem nova (Seção 57
+        # fala de evitar redesenho SEM mudança de conteúdo, não este
+        # caso); chave sempre nova em vez de tentar compor uma chave
+        # estável a partir de três fontes diferentes de estado.
+        self._draw_counter += 1
+        self._draw(lines, key=("full", self._draw_counter))
+
     def render_state(self, payload: dict) -> None:
+        if not self._accept(payload):
+            return
         self._last_state_payload = payload
         humanization = payload.get("humanization") or {}
         expression = humanization.get("expression", "neutral")
         state = payload.get("state", "unknown")
-        self._draw(_state_box(state, expression), key=("state", state, expression))
+
+        if self._mode == MODE_FULL:
+            self._draw_full()
+        elif self._mode == MODE_MINIMAL:
+            self._draw([glyph_for(expression)], key=("minimal", state, expression))
+        else:
+            self._draw(_state_box(state, expression), key=("state", state, expression))
+
+    def render_context(self, payload: dict) -> None:
+        if not self._accept(payload):
+            return
+        self._last_context = payload.get("context") or {}
+        if self._mode == MODE_FULL:
+            self._draw_full()
+
+    def render_timeline_entry(self, payload: dict) -> None:
+        if not self._accept(payload):
+            return
+        transition = payload.get("transition") or {}
+        label = str(transition.get("to") or "").capitalize()
+        if label:
+            self._timeline_labels.append(label)
+            self._timeline_labels = self._timeline_labels[-TIMELINE_MAX_ENTRIES:]
+        if self._mode == MODE_FULL:
+            self._draw_full()
 
     def render_layer2(self, payload: dict) -> None:
+        if not self._accept(payload):
+            return
         message = payload.get("message", "")
         self._draw(_layer2_box(message), key=("layer2", message))
 
     def clear_layer2(self) -> None:
-        """Popup de Camada 2 some sozinho (Seção 18): volta pra caixa
-        de estado que já estava sendo mostrada, ou fica em branco se
-        nenhum state_update chegou ainda."""
+        """Popup de Camada 2 some sozinho (Seção 18): volta pro que já
+        estava sendo mostrado, ou fica em branco se nada chegou ainda."""
         self._last_key = None  # o popup pode ter sido a ultima chave desenhada
-        if self._last_state_payload is not None:
+        if self._mode == MODE_FULL:
+            self._draw_full()
+        elif self._last_state_payload is not None:
             self.render_state(self._last_state_payload)
         else:
             self._draw([], key=("empty",))
