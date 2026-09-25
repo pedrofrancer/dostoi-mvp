@@ -16,14 +16,17 @@ from visual_harness.server.api import create_app
 from visual_harness.server.store import SessionStore
 
 
+_PROVIDER_VARS = ("VH_JUDGE_BASE_URL", "VH_JUDGE_API_KEY", "VH_JUDGE_MODEL")
+
+
 class TestLayer2PipelineOverWebSocket(unittest.TestCase):
     def setUp(self):
-        self._had_key = "ANTHROPIC_API_KEY" in os.environ
-        self._old_key = os.environ.pop("ANTHROPIC_API_KEY", None)
+        self._saved = {name: os.environ.pop(name, None) for name in _PROVIDER_VARS}
 
     def tearDown(self):
-        if self._had_key:
-            os.environ["ANTHROPIC_API_KEY"] = self._old_key
+        for name, value in self._saved.items():
+            if value is not None:
+                os.environ[name] = value
 
     def test_command_failure_broadcasts_a_layer2_update(self):
         with TemporaryDirectory() as tmp:

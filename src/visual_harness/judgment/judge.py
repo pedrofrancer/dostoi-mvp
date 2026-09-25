@@ -2,9 +2,13 @@
 checkpoint capturou. Duas vias, na mesma ordem do protótipo que serviu
 de referência (`dostoi/judge.py`):
 
-1. Se `ANTHROPIC_API_KEY` estiver setada e o pacote `anthropic`
-   instalado, pede o julgamento de verdade a um modelo pequeno, com o
-   contexto já redigido (Seção 43) antes de sair do processo.
+1. Se `VH_JUDGE_BASE_URL`, `VH_JUDGE_API_KEY` e `VH_JUDGE_MODEL`
+   estiverem setadas, pede o julgamento de verdade a um modelo, com o
+   contexto já redigido (Seção 43) antes de sair do processo. Cliente
+   HTTP genérico contra qualquer endpoint `/chat/completions`
+   compatível com OpenAI (Groq, OpenRouter, Cerebras, Ollama local, o
+   que o usuário já tiver rodando o próprio agente de código através
+   de OpenCode/outro CLI), não um SDK de um provedor só.
 2. Senão, cai num template fixo por tipo de checkpoint.
 
 A chamada de rede é sempre feita numa thread separada pelo chamador
@@ -13,10 +17,12 @@ A chamada de rede é sempre feita numa thread separada pelo chamador
 """
 import os
 
+import httpx
+
 from visual_harness.humanization.messages import check_message
 from visual_harness.privacy.redaction import redact_payload
 
-MODEL = os.environ.get("VH_JUDGE_MODEL", "claude-haiku-4-5-20251001")
+REQUEST_TIMEOUT_SECONDS = 15.0
 
 _SYSTEM_PROMPT = (
     "Você é a camada metacognitiva de um agente de programação: não faz "
@@ -28,15 +34,13 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _client():
-    try:
-        import anthropic
-    except ImportError:
+def _provider_config() -> tuple[str, str, str] | None:
+    base_url = os.environ.get("VH_JUDGE_BASE_URL")
+    api_key = os.environ.get("VH_JUDGE_API_KEY")
+    model = os.environ.get("VH_JUDGE_MODEL")
+    if not base_url or not api_key or not model:
         return None
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        return None
-    return anthropic.Anthropic(api_key=key)
+    return base_url.rstrip("/"), api_key, model
 
 
 def _build_user_message(checkpoint_type: str, context: dict) -> str | None:
@@ -55,25 +59,34 @@ def _build_user_message(checkpoint_type: str, context: dict) -> str | None:
 
 
 def _llm_comment(checkpoint_type: str, context: dict) -> str | None:
-    client = _client()
-    if client is None:
+    config = _provider_config()
+    if config is None:
         return None
+    base_url, api_key, model = config
 
     user_msg = _build_user_message(checkpoint_type, context)
     if user_msg is None:
         return None
 
     try:
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=80,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "max_tokens": 80,
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
-        texto = resp.content[0].text.strip()
+        response.raise_for_status()
+        texto = response.json()["choices"][0]["message"]["content"].strip()
         check_message(texto)  # Seção 62: mesmo vindo do LLM, nunca sem guarda
         return texto
-    except Exception:  # rede, rate limit, guarda de vocabulário: cai no fallback
+    except Exception:  # rede, provedor fora do ar, formato inesperado, guarda de vocabulario
         return None
 
 
