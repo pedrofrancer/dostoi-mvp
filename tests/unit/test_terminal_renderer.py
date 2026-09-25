@@ -1,26 +1,27 @@
-"""Unidade (TechSpecs Seção 18, 57-59): o overlay reserva a região com
-DECSTBM, desenha só quando o conteúdo muda, e o popup de Camada 2 volta
-pro último estado quando some.
+"""Unidade (TechSpecs Seção 18-19, 57-59): o overlay reserva a região
+com DECSTBM, desenha só quando o conteúdo muda, o popup de Camada 2
+volta pro último estado quando some, e cada modo (compact/full/minimal)
+mostra o que deve.
 """
 import io
 import unittest
 
 from visual_harness.terminal import ansi
-from visual_harness.terminal.renderer import TerminalOverlay
+from visual_harness.terminal.renderer import MODE_FULL, MODE_MINIMAL, TerminalOverlay
 
 
-def _overlay(region_height=4, rows=24):
+def _overlay(mode="compact", rows=24):
     stream = io.StringIO()
-    overlay = TerminalOverlay(stream=stream, region_height=region_height, rows=rows)
+    overlay = TerminalOverlay(stream=stream, mode=mode, rows=rows)
     return overlay, stream
 
 
 class TestStartAndStop(unittest.TestCase):
     def test_start_reserves_the_bottom_rows(self):
-        overlay, stream = _overlay(region_height=4, rows=24)
+        overlay, stream = _overlay(mode="compact", rows=24)
         overlay.start()
         output = stream.getvalue()
-        self.assertIn(ansi.set_scroll_region(1, 20), output)
+        self.assertIn(ansi.set_scroll_region(1, 18), output)  # 24 - region(6)
         self.assertIn(ansi.HIDE_CURSOR, output)
 
     def test_stop_resets_the_scroll_region_and_shows_the_cursor(self):
@@ -66,6 +67,74 @@ class TestRenderState(unittest.TestCase):
         stream.seek(0)
         overlay.render_state({"state": "testing", "humanization": {"expression": "focused"}})
         self.assertIn("Testing", stream.getvalue())
+
+
+class TestMinimalMode(unittest.TestCase):
+    def test_shows_only_the_glyph(self):
+        overlay, stream = _overlay(mode=MODE_MINIMAL)
+        overlay.start()
+        overlay.render_state({"state": "reconsidering", "humanization": {"expression": "thoughtful"}})
+        output = stream.getvalue()
+        self.assertIn("(u_u)", output)
+        self.assertNotIn("Reconsidering", output)
+
+
+class TestFullMode(unittest.TestCase):
+    def test_state_context_and_timeline_all_appear(self):
+        overlay, stream = _overlay(mode=MODE_FULL)
+        overlay.start()
+        overlay.render_state({"state": "testing", "humanization": {"expression": "focused"}})
+        overlay.render_context(
+            {
+                "context": {
+                    "task": "Authentication",
+                    "agent": "Claude Code",
+                    "modified_files": ["a.py", "b.py"],
+                    "tests_passed": 31,
+                    "tests_failed": 2,
+                    "recent_errors": ["x"],
+                }
+            }
+        )
+        overlay.render_timeline_entry({"transition": {"to": "understanding"}})
+        overlay.render_timeline_entry({"transition": {"to": "testing"}})
+
+        output = stream.getvalue()
+        self.assertIn("Testing", output)
+        self.assertIn("Authentication", output)
+        self.assertIn("Claude Code", output)
+        self.assertIn("2 modificados", output)
+        self.assertIn("31 / 2", output)
+        self.assertIn("Understanding", output)
+        # a mais recente marcada diferente das que ja passaram (Secao 18)
+        self.assertIn("→ Testing", output)
+        self.assertIn("✓ Understanding", output)
+
+    def test_timeline_is_capped_at_five_entries(self):
+        overlay, stream = _overlay(mode=MODE_FULL)
+        overlay.start()
+        for i in range(8):
+            overlay.render_timeline_entry({"transition": {"to": f"state{i}"}})
+        self.assertEqual(len(overlay._timeline_labels), 5)
+        self.assertEqual(overlay._timeline_labels[0], "State3")
+        self.assertEqual(overlay._timeline_labels[-1], "State7")
+
+
+class TestSessionLock(unittest.TestCase):
+    def test_first_session_locks_out_messages_from_other_sessions(self):
+        overlay, stream = _overlay()
+        overlay.start()
+        overlay.render_state(
+            {"session_id": "s1", "state": "idle", "humanization": {"expression": "neutral"}}
+        )
+        stream.truncate(0)
+        stream.seek(0)
+
+        overlay.render_state(
+            {"session_id": "s2", "state": "testing", "humanization": {"expression": "focused"}}
+        )
+
+        self.assertEqual(stream.getvalue(), "")  # sessao errada, nada desenhado
 
 
 class TestLayer2Popup(unittest.TestCase):
