@@ -333,7 +333,7 @@ capturado num stream em memória em vez do terminal de verdade). A
 `vh watch` num terminal real, seja o avatar SVG antigo no navegador;
 essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
 reaproveitado pelos testes de integração e end-to-end. Duzentos e trinta
-e dois testes, todos verdes na última vez que rodei.
+e sete testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
