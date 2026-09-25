@@ -148,8 +148,10 @@ evento → EventBus → SessionStore → motor de estado → motor de humanizaç
 - `visual_harness/terminal/`: o avatar desenhando no terminal (TechSpecs
   Seção 4-5, 18-19, 57-59), cliente do mesmo WebSocket que o browser
   consumia. Região reservada por `DECSTBM`, imune ao scroll do agente;
-  modo compacto (avatar, estado, popup de Camada 2), sem painel de
-  contexto nem timeline ainda.
+  três modos (`compact`, o padrão: avatar e estado; `full`: painel de
+  contexto e linha do tempo também; `minimal`: só o glifo). Trava na
+  primeira sessão que aparece, pra não misturar dado de sessões
+  diferentes no mesmo overlay.
 - `frontend/`: o avatar SVG original em JavaScript puro, sem build,
   servido pelo próprio backend. TechSpecs Seção 4-5 retirou o browser
   da arquitetura em favor do terminal (`visual_harness/terminal/`
@@ -169,13 +171,17 @@ Num segundo terminal, o avatar no lugar que o projeto está indo agora
 
 ```bash
 vh watch
+vh watch --mode full   # + painel de contexto e linha do tempo
+vh watch --mode minimal   # só o glifo, rodapé mínimo
 ```
 
 Reserva as últimas linhas do terminal pro avatar, estado atual e popup
 de Camada 2 quando um checkpoint dispara; o resto da tela continua
-rolando normal. `Ctrl+C` sai e devolve o terminal como estava. Limite
-conhecido: redimensionar a janela com o `vh watch` aberto não é
-tratado, reinicia o comando se isso acontecer.
+rolando normal. `Ctrl+C` sai e devolve o terminal como estava. Limites
+conhecidos: redimensionar a janela com o `vh watch` aberto não é
+tratado, reinicia o comando se isso acontecer; o modo `full` não
+hidrata contexto e linha do tempo de antes da conexão, começa vazio e
+preenche ao vivo.
 
 Pra ver no navegador o avatar SVG antigo (Passo 8, TechSpecs Seção 4-5
 já não recomenda mais este caminho, veja a nota em `frontend/` acima):
@@ -311,8 +317,8 @@ capturado num stream em memória em vez do terminal de verdade). A
 única perna sem automação é olhar pra tela de verdade, seja o
 `vh watch` num terminal real, seja o avatar SVG antigo no navegador;
 essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
-reaproveitado pelos testes de integração e end-to-end. Cento e noventa
-e nove testes, todos verdes na última vez que rodei.
+reaproveitado pelos testes de integração e end-to-end. Duzentos e seis
+testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
