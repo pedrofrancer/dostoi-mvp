@@ -90,8 +90,10 @@ def create_app(
             )
 
         history = store.get_events(event.session_id)[:-1]
-        for checkpoint_type, context in layer2_checkpoints.detect(event, history):
-            texto, source = await asyncio.to_thread(layer2_judge.comment, checkpoint_type, context)
+        for checkpoint_type, checkpoint_context in layer2_checkpoints.detect(event, history):
+            texto, source = await asyncio.to_thread(
+                layer2_judge.comment, checkpoint_type, checkpoint_context
+            )
             judgment = Layer2Judgment(
                 session_id=event.session_id,
                 checkpoint_type=checkpoint_type,
@@ -99,6 +101,18 @@ def create_app(
                 source=source,
             )
             await _broadcast({"type": "layer2_update", "payload": judgment.model_dump(mode="json")})
+
+        context = store.get_context(event.session_id)
+        if context is not None:
+            await _broadcast(
+                {
+                    "type": "session_update",
+                    "payload": {
+                        "session_id": event.session_id,
+                        "context": context.model_dump(mode="json"),
+                    },
+                }
+            )
 
     bus.subscribe(_on_event)
 

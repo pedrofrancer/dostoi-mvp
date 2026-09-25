@@ -193,6 +193,7 @@ class TestWebSocket(unittest.TestCase):
             websocket.receive_json()  # event
             first_state_update = websocket.receive_json()
             websocket.receive_json()  # timeline_update (None -> understanding, transicao real)
+            websocket.receive_json()  # session_update
 
             # segundo evento chega bem rapido (dentro da janela padrao de 200ms)
             client.post(
@@ -207,6 +208,7 @@ class TestWebSocket(unittest.TestCase):
             websocket.receive_json()  # event
             second_state_update = websocket.receive_json()
             websocket.receive_json()  # timeline_update (understanding -> error, transicao real)
+            websocket.receive_json()  # session_update
 
         self.assertEqual(first_state_update["payload"]["state"], "understanding")
         # a mudanca de verdade (error) fica suprimida pela histerese;
@@ -234,6 +236,30 @@ class TestWebSocket(unittest.TestCase):
         self.assertEqual(third["type"], "timeline_update")
         self.assertIsNone(third["payload"]["transition"]["from"])
         self.assertEqual(third["payload"]["transition"]["to"], "understanding")
+
+    def test_websocket_receives_session_update_with_the_current_context(self):
+        app, *_ = build_test_app()
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as websocket:
+            client.post(
+                "/api/events",
+                json={
+                    "session_id": "sess_ctx",
+                    "source": "claude-code",
+                    "type": "task_started",
+                    "payload": {"description": "corrigir login"},
+                },
+            )
+            websocket.receive_json()  # event
+            websocket.receive_json()  # state_update
+            websocket.receive_json()  # timeline_update
+            fourth = websocket.receive_json()
+
+        self.assertEqual(fourth["type"], "session_update")
+        self.assertEqual(fourth["payload"]["session_id"], "sess_ctx")
+        self.assertEqual(fourth["payload"]["context"]["task"], "corrigir login")
+        self.assertEqual(fourth["payload"]["context"]["agent"], "claude-code")
 
 
 class TestDefaultBind(unittest.TestCase):

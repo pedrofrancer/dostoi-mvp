@@ -153,8 +153,18 @@ evento → EventBus → SessionStore → motor de estado → motor de humanizaç
 - `visual_harness/demo/`: uma sessão fixa de sete eventos que prova a
   arquitetura inteira sem precisar de nenhum agente de verdade rodando.
 - `visual_harness/cli/`: o `vh`, cliente fino sobre a própria API.
-- `frontend/`: o avatar, o painel de contexto, a timeline, tudo em
-  JavaScript puro, sem build, servido pelo próprio backend.
+- `visual_harness/terminal/`: o avatar desenhando no terminal (TechSpecs
+  Seção 4-5, 18-19, 57-59), cliente do mesmo WebSocket que o browser
+  consumia. Região reservada por `DECSTBM`, imune ao scroll do agente;
+  três modos (`compact`, o padrão: avatar e estado; `full`: painel de
+  contexto e linha do tempo também; `minimal`: só o glifo). Trava na
+  primeira sessão que aparece, pra não misturar dado de sessões
+  diferentes no mesmo overlay.
+- `frontend/`: o avatar SVG original em JavaScript puro, sem build,
+  servido pelo próprio backend. TechSpecs Seção 4-5 retirou o browser
+  da arquitetura em favor do terminal (`visual_harness/terminal/`
+  acima); este diretório fica no repositório por enquanto, mas não é
+  mais pra onde o projeto está indo.
 
 ## Instalando e rodando
 
@@ -164,8 +174,28 @@ pip install -e .
 vh start
 ```
 
-Abre `http://127.0.0.1:8765/` no navegador: avatar, painel de contexto,
-timeline. `Ctrl+C` pra parar em primeiro plano, ou `vh stop` de outro
+Num segundo terminal, o avatar no lugar que o projeto está indo agora
+(TechSpecs Seção 4-5, veja Arquitetura acima):
+
+```bash
+vh watch
+vh watch --mode full   # + painel de contexto e linha do tempo
+vh watch --mode minimal   # só o glifo, rodapé mínimo
+```
+
+Reserva as últimas linhas do terminal pro avatar, estado atual e popup
+de Camada 2 quando um checkpoint dispara; o resto da tela continua
+rolando normal. `Ctrl+C` sai e devolve o terminal como estava. Limites
+conhecidos: redimensionar a janela com o `vh watch` aberto não é
+tratado, reinicia o comando se isso acontecer; o modo `full` não
+hidrata contexto e linha do tempo de antes da conexão, começa vazio e
+preenche ao vivo.
+
+Pra ver no navegador o avatar SVG antigo (Passo 8, TechSpecs Seção 4-5
+já não recomenda mais este caminho, veja a nota em `frontend/` acima):
+abra `http://127.0.0.1:8765/` com o backend rodando.
+
+`Ctrl+C` pra parar `vh start` em primeiro plano, ou `vh stop` de outro
 terminal se subiu em background (o PID fica salvo em
 `~/.visual-harness/server.pid`).
 
@@ -291,13 +321,15 @@ mock onde faz sentido), `tests/integration` (componentes de verdade
 rodando juntos, sem mock, uma sessão inteira do primeiro evento até o
 WebSocket, tudo em processo, via `TestClient`), `tests/e2e` (a mesma
 sessão, mas cruzando a fronteira de processo de verdade: `vh event`/`vh
-status` fazem HTTP contra um `uvicorn` real numa porta real, e o
-WebSocket é o cliente `websockets` de verdade, não o transporte
-in-process do `TestClient`; a última perna, browser abrindo e avatar
-desenhando na tela, fica pra verificação manual, TestClient não abre
-navegador). `tests/fixtures` guarda o dado cru reaproveitado pelos
-testes de integração e end-to-end. Cento e noventa e um testes, todos
-verdes na última vez que rodei.
+status` fazem HTTP contra um `uvicorn` real numa porta real, o
+WebSocket é o cliente `websockets` de verdade, e o avatar de terminal
+roda de ponta a ponta contra esse servidor real, com o desenho
+capturado num stream em memória em vez do terminal de verdade). A
+única perna sem automação é olhar pra tela de verdade, seja o
+`vh watch` num terminal real, seja o avatar SVG antigo no navegador;
+essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
+reaproveitado pelos testes de integração e end-to-end. Duzentos e vinte
+e cinco testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
