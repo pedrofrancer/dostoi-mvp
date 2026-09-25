@@ -2,6 +2,7 @@
 (Seção 42) acontece em `main.py`, não aqui; este módulo só declara o
 comportamento das rotas.
 """
+import asyncio
 import time
 from pathlib import Path
 
@@ -15,6 +16,9 @@ from visual_harness.events.bus import EventBus
 from visual_harness.events.models import Event
 from visual_harness.events.types import EventType
 from visual_harness.humanization.engine import humanize
+from visual_harness.judgment import checkpoints as layer2_checkpoints
+from visual_harness.judgment import judge as layer2_judge
+from visual_harness.judgment.models import Layer2Judgment
 from visual_harness.server.store import SessionStore
 from visual_harness.state.engine import derive_state
 from visual_harness.state.hysteresis import StateHysteresis
@@ -84,6 +88,17 @@ def create_app(
                     },
                 }
             )
+
+        history = store.get_events(event.session_id)[:-1]
+        for checkpoint_type, context in layer2_checkpoints.detect(event, history):
+            texto, source = await asyncio.to_thread(layer2_judge.comment, checkpoint_type, context)
+            judgment = Layer2Judgment(
+                session_id=event.session_id,
+                checkpoint_type=checkpoint_type,
+                message=texto,
+                source=source,
+            )
+            await _broadcast({"type": "layer2_update", "payload": judgment.model_dump(mode="json")})
 
     bus.subscribe(_on_event)
 
