@@ -275,12 +275,18 @@ pip install -e ".[dev]"
 pytest tests
 ```
 
-Três camadas, como o TechSpecs pede: `tests/unit` (isolado, mock onde
-faz sentido), `tests/integration` (componentes de verdade rodando
-juntos, sem mock, uma sessão inteira do primeiro evento até o
-WebSocket), `tests/fixtures` (dado reaproveitado pelos testes de
-integração). Cento e setenta testes, todos verdes na última vez que
-rodei.
+Três camadas, como o TechSpecs pede (Seção 53): `tests/unit` (isolado,
+mock onde faz sentido), `tests/integration` (componentes de verdade
+rodando juntos, sem mock, uma sessão inteira do primeiro evento até o
+WebSocket, tudo em processo, via `TestClient`), `tests/e2e` (a mesma
+sessão, mas cruzando a fronteira de processo de verdade: `vh event`/`vh
+status` fazem HTTP contra um `uvicorn` real numa porta real, e o
+WebSocket é o cliente `websockets` de verdade, não o transporte
+in-process do `TestClient`; a última perna, browser abrindo e avatar
+desenhando na tela, fica pra verificação manual, TestClient não abre
+navegador). `tests/fixtures` guarda o dado cru reaproveitado pelos
+testes de integração e end-to-end. Cento e setenta e dois testes, todos
+verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
