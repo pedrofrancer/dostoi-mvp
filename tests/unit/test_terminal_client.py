@@ -20,11 +20,24 @@ class TestDispatch(unittest.TestCase):
         client.dispatch(overlay, {"type": "state_update", "payload": {"state": "idle"}})
         overlay.render_state.assert_called_once_with({"state": "idle"})
 
+    def test_session_update_calls_render_context(self):
+        overlay = MagicMock()
+        client.dispatch(overlay, {"type": "session_update", "payload": {"context": {}}})
+        overlay.render_context.assert_called_once_with({"context": {}})
+
+    def test_timeline_update_calls_render_timeline_entry(self):
+        overlay = MagicMock()
+        payload = {"transition": {"to": "testing"}}
+        client.dispatch(overlay, {"type": "timeline_update", "payload": payload})
+        overlay.render_timeline_entry.assert_called_once_with(payload)
+
     def test_unknown_type_touches_nothing(self):
         overlay = MagicMock()
-        client.dispatch(overlay, {"type": "session_update", "payload": {}})
+        client.dispatch(overlay, {"type": "avatar_command", "payload": {}})
         overlay.render_state.assert_not_called()
         overlay.render_layer2.assert_not_called()
+        overlay.render_context.assert_not_called()
+        overlay.render_timeline_entry.assert_not_called()
 
     def test_missing_payload_defaults_to_empty_dict(self):
         overlay = MagicMock()

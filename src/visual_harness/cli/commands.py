@@ -134,11 +134,21 @@ def event(
 
 
 @app.command()
-def watch(host: str = HostOption, port: int = PortOption) -> None:
+def watch(
+    host: str = HostOption,
+    port: int = PortOption,
+    mode: str = typer.Option(
+        "compact", "--mode", help="compact (padrao), full ou minimal (Secao 19)"
+    ),
+) -> None:
     """Mostra o avatar reagindo neste terminal (TechSpecs Seção 4-5,
-    18-19). Modo compacto: avatar, estado, popup de Camada 2. Ctrl+C
-    pra sair."""
-    overlay = TerminalOverlay()
+    18-19). Compacto: avatar e estado. Full: painel de contexto e
+    linha do tempo tambem. Minimal: so o glifo. Ctrl+C pra sair."""
+    if mode not in ("compact", "full", "minimal"):
+        typer.echo(f"vh: modo invalido {mode!r}, use compact, full ou minimal")
+        raise typer.Exit(code=2)
+
+    overlay = TerminalOverlay(mode=mode)
     overlay.start()
     try:
         asyncio.run(run_terminal_client(host, port, overlay))

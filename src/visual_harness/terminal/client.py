@@ -27,6 +27,10 @@ def dispatch(overlay: TerminalOverlay, message: dict) -> asyncio.Task | None:
     payload = message.get("payload") or {}
     if msg_type == "state_update":
         overlay.render_state(payload)
+    elif msg_type == "session_update":
+        overlay.render_context(payload)
+    elif msg_type == "timeline_update":
+        overlay.render_timeline_entry(payload)
     elif msg_type == "layer2_update":
         return asyncio.ensure_future(_handle_layer2(overlay, payload))
     return None
