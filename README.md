@@ -116,8 +116,9 @@ reagir ao vivo.
 
 ```
 evento → EventBus → SessionStore → motor de estado → motor de humanização → WebSocket → avatar
-                          ↓
-                       SQLite (write-through, com redação opcional)
+                          │
+                          ├→ SQLite (write-through, com redação opcional)
+                          └→ detector de checkpoint → julgamento (LLM ou heurística) → WebSocket → popup de Camada 2
 ```
 
 - `visual_harness/events/`: o contrato comum (`Event`, `EventType`,
@@ -132,6 +133,11 @@ evento → EventBus → SessionStore → motor de estado → motor de humanizaç
 - `visual_harness/context/`: o resumo de sessão, tarefa, arquivos
   tocados, testes, erros recentes, calculado a partir do histórico de
   eventos.
+- `visual_harness/judgment/`: Camada 2, a metacognitiva (TechSpecs
+  Seção 60.1). Detecta checkpoint (falha de comando ou teste,
+  retrabalho no mesmo arquivo), redige o contexto antes de sair do
+  processo, e pede o julgamento a um LLM pequeno, com fallback de
+  template fixo quando falta chave ou rede.
 - `visual_harness/server/`: a API REST, o WebSocket, e o store em
   memória que serve tudo isso rápido.
 - `visual_harness/persistence/`: as quatro tabelas SQLite (sessions,
@@ -208,6 +214,8 @@ sozinho.
 | `VH_PORT` | `8765` | porta que o hook do Claude Code chama |
 | `VH_DISABLE_PERSISTENCE` | desligado (persistência ligada) | qualquer valor desliga a escrita em SQLite |
 | `VH_PRIVACY_MODE` | `standard` | `strict` / `standard` / `debug` |
+| `ANTHROPIC_API_KEY` | nenhuma (Camada 2 usa template fixo) | com ela e o pacote `anthropic` instalado, a Camada 2 julga o checkpoint de verdade |
+| `VH_JUDGE_MODEL` | `claude-haiku-4-5-20251001` | modelo usado no julgamento da Camada 2 |
 
 Banco em `~/.visual-harness/harness.db`.
 
@@ -317,8 +325,8 @@ capturado num stream em memória em vez do terminal de verdade). A
 única perna sem automação é olhar pra tela de verdade, seja o
 `vh watch` num terminal real, seja o avatar SVG antigo no navegador;
 essa fica pra verificação manual. `tests/fixtures` guarda o dado cru
-reaproveitado pelos testes de integração e end-to-end. Duzentos e seis
-testes, todos verdes na última vez que rodei.
+reaproveitado pelos testes de integração e end-to-end. Duzentos e vinte
+e dois testes, todos verdes na última vez que rodei.
 
 Verificação de dependência com `pip-audit`: nenhuma vulnerabilidade
 conhecida encontrada.
