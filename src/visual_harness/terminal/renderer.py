@@ -13,11 +13,24 @@ Limite conhecido: resize de terminal em pleno `vh watch` não é tratado
 cheio não hidrata contexto/linha do tempo de antes da conexão (Step
 17): começa vazio e preenche ao vivo.
 """
+import re
 import shutil
 import sys
 
 from visual_harness.terminal import ansi
 from visual_harness.terminal.glyphs import glyph_for
+
+# Seção 40 (Security Requirements) não cobria isso porque não existia
+# terminal ainda: task/agent (payload de evento) e a mensagem de
+# Camada 2 chegam de fora do processo sem garantia de conteúdo. Sem
+# isso, um payload malicioso escreveria sequência de escape ANSI de
+# verdade no terminal de quem estiver rodando `vh watch` (troca de
+# título, reposicionamento de cursor, o que o emulador aceitar).
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _sanitize(text: str) -> str:
+    return _CONTROL_CHARS.sub("", text)
 
 MODE_COMPACT = "compact"
 MODE_FULL = "full"
@@ -62,7 +75,7 @@ def _wrap(text: str, width: int) -> list[str]:
 
 def _state_box(state: str, expression: str) -> list[str]:
     glyph = glyph_for(expression)
-    label = state.capitalize()
+    label = _sanitize(state).capitalize()
     top = "┌" + "─" * (BOX_INNER_WIDTH + 2) + "┐"
     bottom = "└" + "─" * (BOX_INNER_WIDTH + 2) + "┘"
     return [
@@ -78,7 +91,7 @@ def _layer2_box(message: str) -> list[str]:
     bottom = "╰" + "─" * (POPUP_INNER_WIDTH + 2) + "╯"
     body = [
         "│ " + line.ljust(POPUP_INNER_WIDTH) + " │"
-        for line in _wrap(message, POPUP_INNER_WIDTH)[: TIMELINE_MAX_ENTRIES]
+        for line in _wrap(_sanitize(message), POPUP_INNER_WIDTH)[:TIMELINE_MAX_ENTRIES]
     ]
     return [top, *body, bottom]
 
@@ -96,8 +109,8 @@ def _row(label: str, value: str, inner_width: int) -> str:
 
 
 def _context_lines(context: dict, inner_width: int) -> list[str]:
-    task = context.get("task") or "-"
-    agent = context.get("agent") or "-"
+    task = _sanitize(str(context.get("task") or "-"))
+    agent = _sanitize(str(context.get("agent") or "-"))
     files = len(context.get("modified_files") or [])
     passed = context.get("tests_passed", 0)
     failed = context.get("tests_failed", 0)
@@ -116,7 +129,7 @@ def _timeline_lines(entries: list[str], inner_width: int) -> list[str]:
     lines = [_titled_border("LINHA DO TEMPO", inner_width, ("├", "┤"))]
     for index, label in enumerate(entries):
         marker = "→" if index == len(entries) - 1 else "✓"
-        text = f"{marker} {label}"[:inner_width].ljust(inner_width)
+        text = f"{marker} {_sanitize(label)}"[:inner_width].ljust(inner_width)
         lines.append("│ " + text + " │")
     lines.append("└" + "─" * (inner_width + 2) + "┘")
     return lines
