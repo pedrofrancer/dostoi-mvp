@@ -7,7 +7,16 @@ import io
 import unittest
 
 from visual_harness.terminal import ansi
-from visual_harness.terminal.renderer import MODE_FULL, MODE_MINIMAL, TerminalOverlay
+from visual_harness.terminal.renderer import (
+    MODE_FULL,
+    MODE_MINIMAL,
+    TerminalOverlay,
+    _context_lines,
+    _layer2_box,
+    _sanitize,
+    _state_box,
+    _timeline_lines,
+)
 
 
 def _overlay(mode="compact", rows=24):
@@ -163,6 +172,45 @@ class TestLayer2Popup(unittest.TestCase):
         overlay.start()
         overlay.render_layer2({"message": "primeiro checkpoint da sessao"})
         overlay.clear_layer2()  # nao deve levantar, mesmo sem state_update antes
+
+
+class TestControlCharacterSanitization(unittest.TestCase):
+    """task/agent/mensagem de Camada 2 vem de payload de evento, fora
+    do controle do processo (Step 19): sem isso, um payload malicioso
+    escreve sequência de escape ANSI de verdade no terminal de quem
+    roda `vh watch` (troca de título, reposicionamento de cursor)."""
+
+    _INJECTION = "normal\x1b]0;pwned\x07resto"
+
+    def test_sanitize_strips_c0_and_del(self):
+        self.assertEqual(_sanitize(self._INJECTION), "normal]0;pwnedresto")
+        self.assertEqual(_sanitize("a\x7fb"), "ab")
+
+    def test_context_lines_strip_control_chars_from_task_and_agent(self):
+        lines = _context_lines(
+            {"task": self._INJECTION, "agent": self._INJECTION}, inner_width=40
+        )
+        joined = "\n".join(lines)
+        self.assertNotIn("\x1b", joined)
+        self.assertNotIn("\x07", joined)
+
+    def test_layer2_box_strips_control_chars_from_message(self):
+        lines = _layer2_box(self._INJECTION)
+        joined = "\n".join(lines)
+        self.assertNotIn("\x1b", joined)
+        self.assertNotIn("\x07", joined)
+
+    def test_timeline_lines_strip_control_chars_from_label(self):
+        lines = _timeline_lines([self._INJECTION], inner_width=40)
+        joined = "\n".join(lines)
+        self.assertNotIn("\x1b", joined)
+        self.assertNotIn("\x07", joined)
+
+    def test_state_box_strips_control_chars_from_state(self):
+        lines = _state_box(self._INJECTION, "neutral")
+        joined = "\n".join(lines)
+        self.assertNotIn("\x1b", joined)
+        self.assertNotIn("\x07", joined)
 
 
 class TestReconnecting(unittest.TestCase):

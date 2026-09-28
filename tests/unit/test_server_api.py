@@ -208,6 +208,7 @@ class TestWebSocket(unittest.TestCase):
             websocket.receive_json()  # event
             second_state_update = websocket.receive_json()
             websocket.receive_json()  # timeline_update (understanding -> error, transicao real)
+            websocket.receive_json()  # layer2_update (test_failed e gatilho de checkpoint)
             websocket.receive_json()  # session_update
 
         self.assertEqual(first_state_update["payload"]["state"], "understanding")
